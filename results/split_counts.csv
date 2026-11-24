@@ -1,0 +1,5 @@
+,train,validation,test
+None,71930,23976,23976
+Minor,1679,560,560
+Subst/Destroyed,878,293,293
+Total,74487,24829,24829

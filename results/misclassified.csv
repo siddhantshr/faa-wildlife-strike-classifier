@@ -1,0 +1,9 @@
+,Subst/Destroyed caught,Subst/Destroyed called None,Subst/Destroyed called Minor,None called Subst/Destroyed,None correctly None
+strikes,124,128,41,232,23457
+median SPEED (kt),125.0,135.0,100.0,130.0,140.0
+median HEIGHT (ft),900.0,35.0,500.0,550.0,50.0
+BodyMass missing (%),25.0,57.8125,60.97560975609756,27.586206896551722,58.93763055804237
+SIZE = Large (%),67.74193548387096,25.78125,63.41463414634146,51.724137931034484,2.293558426056188
+SIZE missing (%),3.225806451612903,21.875,2.4390243902439024,3.4482758620689653,18.987935371104577
+median AC_MASS,2.0,4.0,1.0,3.0,4.0
+most common phase,En Route,Approach,Approach,Climb,Approach

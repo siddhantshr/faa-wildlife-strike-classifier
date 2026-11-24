@@ -1,0 +1,3 @@
+model,f1_macro,bal_acc,accuracy,precision_None,precision_Minor,precision_Subst/Destroyed,recall_None,recall_Minor,recall_Subst/Destroyed,f1_None,f1_Minor,f1_Subst/Destroyed
+Baseline - VAL,0.32750742751767237,0.3333333333333333,0.9656450118812678,0.9656450118812678,0.0,0.0,1.0,0.0,0.0,0.9825222825530171,0.0,0.0
+Baseline - TEST,0.32750742751767237,0.3333333333333333,0.9656450118812678,0.9656450118812678,0.0,0.0,1.0,0.0,0.0,0.9825222825530171,0.0,0.0
