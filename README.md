@@ -1,6 +1,6 @@
 # FAA Wildlife-Strike Damage Classification (DS203)
 
-![README: AI generated](https://img.shields.io/badge/README-AI%20generated-orange)
+![README: This README is AI generated](https://img.shields.io/badge/README-AI%20generated-orange)
 
 Predict the damage outcome of a reported wildlife strike from aircraft, flight, environmental and wildlife
 information, using the FAA National Wildlife Strike Database (NWSD).
