@@ -1,5 +1,7 @@
 # FAA Wildlife-Strike Damage Classification (DS203)
 
+![README: AI generated](https://img.shields.io/badge/README-AI%20generated-orange)
+
 Predict the damage outcome of a reported wildlife strike from aircraft, flight, environmental and wildlife
 information, using the FAA National Wildlife Strike Database (NWSD).
 
@@ -25,24 +27,51 @@ faa-wildlife-strike-classification/
 │   └── processed/
 │       └── dataset.csv           # cleaned, model-ready strike table (output of build-dataset.py)
 ├── utils/
-│   └── build-dataset.py          # the whole raw -> dataset.csv pipeline
+│   ├── build-dataset.py          # the whole raw -> dataset.csv pipeline
+│   └── modelling.py              # shared column lists, split, preprocessing, evaluation helpers
 ├── src/
-│   └── eda.ipynb                 # exploratory analysis
-├── docs/                         # assignment brief, data dictionary, sources
-├── reports/figures/              # plots for the write-up
+│   ├── eda.ipynb                 # exploratory analysis
+│   ├── dummy.ipynb               # majority baseline + class counts per split
+│   ├── logistic_regression.ipynb # Model A and B, class-weight (gamma) tuning
+│   ├── decision_tree.ipynb
+│   ├── random_forest.ipynb
+│   ├── imputation.ipynb          # mean vs median, with/without missing flags
+│   ├── pca.ipynb                 # explained variance, loadings, models with PCA
+│   ├── feature_groups.ipynb      # numerical-only, categorical-only, dropping single features
+│   ├── interpretation.ipynb      # LR coefficients, permutation importance, misclassified strikes
+│   └── binary.ipynb              # damaged vs not damaged (y_bin)
+├── results/                      # CSVs written by the notebooks (scores, CV, importances)
+├── plots/                        # figures written by the notebooks' "## plots" cells
+├── report/
+│   ├── report.tex                # long report
+│   ├── report_short.tex          # 3–4 page report (Introduction / Methodology / Experiments)
+│   ├── make_tables.py            # results/*.csv -> report/tables/*.tex
+│   └── report_overleaf.zip       # upload to Overleaf to compile
+├── presentation/
+│   ├── wildlife_strike_presentation.pptx
+│   └── script.md                 # four-speaker video script (also in the slide notes)
+├── docs/                         # assignment brief
 └── requirements.txt
 ```
 
-## Setup and rebuilding the dataset
+## Setup and reproducing everything
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt python-calamine
+.venv/bin/pip install -r requirements.txt
 .venv/bin/python utils/build-dataset.py      # run from the project root; ~30 s
 ```
 
 `build-dataset.py` reads only `data/raw/` and overwrites `data/processed/dataset.csv`, so the dataset can always
 be rebuilt from scratch.
+
+Then run the notebooks in `src/` (each one reads `../data/processed/dataset.csv` and writes to `../results/` and
+`../plots/`). Run `dummy`, `logistic_regression`, `decision_tree` and `random_forest` before `interpretation`.
+Finally rebuild the report tables:
+
+```bash
+.venv/bin/python report/make_tables.py
+```
 
 ---
 
@@ -187,29 +216,45 @@ labelled reports include speed more often than unlabelled ones. This is analysed
 
 ---
 
-## How the dataset will be used
+## Modelling
 
-1. **Load** `dataset.csv`, restore integer targets (`df["y3"] = df["y3"].astype("Int64")`). For the three-class
-   task keep rows with `y3` present; for the binary task use all rows.
-2. **Split** 60 / 20 / 20 train / validation / test, **stratified** on the target with a fixed seed, so the small
-   damage classes appear in every split. The test set is not touched until final evaluation.
+All shared code is in `utils/modelling.py`.
+
+1. **Load** `dataset.csv` and drop rows without the target (`y3` for the main task, `y_bin` for the binary task).
+2. **Split** 60 / 20 / 20 train / validation / test, **stratified** on the target, seed 67. The same split is used
+   by every notebook. The test set is scored once, in the last cell of each model notebook.
 3. **Preprocess inside a scikit-learn `Pipeline` + `ColumnTransformer`** (fitted on training data only, refitted
    in each CV fold):
-   - numerical: median vs. mean imputation + missingness indicators, log transforms for skewed features, scaling
-   - ordinal: impute, then ordered integer encoding
-   - nominal: `Missing` category, rare levels → `Other` (threshold set on training data), one-hot with
-     `handle_unknown`
-   - optional PCA
-4. **Models:** majority-class baseline, multinomial logistic regression, decision tree, random forest; class
-   weighting for imbalance; stratified CV on macro F1 for tuning.
-5. **Feature sets:**
-   - **Model A** — pre-strike information only (everything except `STR_*` / `ING_*`)
-   - **Model B** — Model A + `STR_*` / `ING_*`
-   - plus numerical-only vs. categorical-only vs. combined, and with/without PCA
-6. **Evaluate on the test set:** accuracy, balanced accuracy, macro F1, per-class precision/recall/F1, confusion
-   matrix — with attention to recall of the damage classes.
-7. **Interpret:** logistic-regression coefficients and random-forest permutation importance, related to impact
-   physics without causal claims.
+   - numerical (`HEIGHT`, `SPEED`, `DISTANCE`, `BodyMass`, `log_ImpactEnergy`, `AC_MASS`, `NUM_ENGS`): median
+     imputation + missingness indicators, then standard scaling
+   - ordinal (`SIZE`, `NUM_SEEN`, `NUM_STRUCK`): ordered integer encoding, most-frequent imputation + indicators
+   - nominal (incl. `INCIDENT_MONTH`, treated as a category): explicit `missing` level, levels seen < 50 times in
+     training grouped as infrequent, one-hot with unseen levels mapped to the infrequent column
+   - Model B passes the 18 `STR_*` / `ING_*` flags through unchanged
+4. **Class imbalance:** class weights `(n_None / n_class) ** gamma`, with `gamma` tuned between 0 (no weighting)
+   and 1 (`"balanced"`).
+5. **Models and tuning** (5-fold stratified CV on macro F1):
+   - majority-class baseline
+   - multinomial logistic regression: `gamma`
+   - decision tree: `max_depth`, `min_samples_leaf`, `gamma` (grid search)
+   - random forest (100 trees): `max_depth`, `min_samples_leaf`, `max_features`, `gamma` (randomised search)
+6. **Further experiments** (Model A): mean vs median imputation, PCA, feature-group ablations, LR coefficients,
+   permutation importance, misclassified strikes, binary task.
+
+## Results (test set)
+
+| Model | Macro F1 (A) | Macro F1 (B) | Balanced acc. (A) | Recall S/D (A) |
+|---|---|---|---|---|
+| Majority baseline | 0.328 | — | 0.333 | 0.00 |
+| Logistic regression | 0.495 | 0.541 | 0.528 | 0.41 |
+| Decision tree | 0.460 | 0.537 | 0.446 | 0.27 |
+| **Random forest** | **0.516** | **0.562** | **0.535** | **0.42** |
+
+- Binary task (damaged vs not): random forest macro F1 0.722 (A) / 0.755 (B), PR-AUC 0.467 (A).
+- Most important features (random forest, Model A): `SIZE`, `BodyMass`, `AC_MASS`, `HEIGHT`, `PHASE_OF_FLIGHT`.
+- Class weighting (`gamma` ≈ 0.25–0.5) mattered most; PCA lowered scores and the imputation method made no
+  measurable difference.
+- Full tables are in `results/` and the reports in `report/`.
 
 ## Known limitations
 - Reporting is voluntary; damaging strikes are more likely to be reported in detail.
@@ -218,3 +263,5 @@ labelled reports include speed more often than unlabelled ones. This is analysed
   a reported speed.
 - From 29 March 2021, non-engine ingestions are recorded differently (`INGESTED_OTHER`, not in this dataset).
 - Severe class imbalance (≈ 82 : 2 : 1).
+- The split is random, not by time; a time-based robustness check was not done.
+- The random forest's best `max_depth` (None) and `max_features` (0.3) are at the edge of the searched values.
